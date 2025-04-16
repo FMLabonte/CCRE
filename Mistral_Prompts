@@ -1,0 +1,485 @@
+Comparison prompt:
+i have the following task for you i have a tsv with two collumns that contain "{category}" labels. i want you to create a third column named match in which you denot if the two collumns describe the same "{category}" the problem is that the original might have different formating or use 2 different names to describe the same "{category}".
+use the labels yes and no to indicate if the two collumns describe the same "{category}".A partial match between collumns where multiple entries are listed and only one matches between them is also considered a match, if one is empty and the other isnt its not a match, if both are emtpty it is a match.. This problem can not be solved with programming and needs a human annotatotor or an LLM annotator so you need to to it yourself. Make sure to list and anotate all the entries present in the given TSV.
+Return it as a json object that contains the TSV {{"Table":TSV}}.  
+# Example TSV format for reference:, from the Category "Connection treatment"
+Gene/Protein.SC_Human	Gene/Protein.SC_AI	Index	Match		
+NA	suppressor(ind) 31	no
+supressor	suppressor(ind) 32	yes
+NA	NA  33  yes	
+inhibitor	suppressor  80	yes
+
+# Example output from the Category "Connection treatment":
+{{"Table":"
+Gene/Protein.SC_Human	Gene/Protein.SC_AI	Index	Match		
+NA	suppressor(ind) 31	no
+supressor	suppressor(ind) 32	yes
+NA	NA  33  yes	
+inhibitor	suppressor  80	yes
+"}}
+
+#TSV 
+# {comparison_str}
+
+Annotation Prompt:
+
+Gene_disease: 
+## Task description:   
+Instructions for Filling the Table
+Below are the guidelines for filling in the table. Please follow these instructions carefully to ensure consistency and accuracy. Consider that it can happen that a text does not hold useful information in that case return NO information.
+### Column Labels and Descriptions
+#### Gene/Protein
+Note the name of the gene/Protein for which connections to a disease or a treatment/chemical/medicine are described. Label it additionally with a (G) if it is stated to be the gene and (P) if it is a Protein. Otherwise, add none. Example: Protein(P)
+add a (mut) label if the Gene or Protein is described to have a mutation. Example: Gene(G)(mut)
+Add (fam) if for gene families instead of single genes. Example: Gene(G)(fam)
+Add (path) if the pathway of the gene interaction is mentioned. Example: Gene(G)(path)
+Only include Genes that are connected to a Disease consider the broader context of the text.
+#### Disease
+If a disease is connected to a gene, specify the disease here. If the disease is a cancer use the following format disease(cancer name)(cancer type). Enter (NA) if a category is not given. Use the information in the text and your understanding of cancer to fill in this information. We only care about genes that are connected to a disease.
+For cancer types use the labels: Carcinoma, Sarcoma, Lymphoma, Leukemia, Myeloma.
+Example: Cancer(lung cancer)(carcinoma) or parkinson
+#### Treatment/Exposure
+If a treatment (drug/chemical/radiation/knock-out, etc.) is mentioned that was used and a connection to the gene is mentioned, write it here. Example: DAS, DADS
+#### Connection Disease
+Use "connected" if no specific interaction is described; there is just some relationship between the gene and the disease.
+Use "key gene" if the gene is directly described as a key gene or it is very clear that this particular gene plays a key role in the interaction.
+Use “marker” if something is used as a marker gene.
+Use “driver” if the gene/protein makes the disease worse
+Use “suppressor” if the gene/protein counteracts (aspects of) the disease
+#### Connection Treatment
+Use "connected" if no specific interaction is described; there is just some relationship between the gene/protein and the treatment.
+Use "target" if a treatment specifically targets this gene/protein.
+Use “activator/suppressor” if the treatment activates/suppresses the gene/protein. Add (ind) if the connection is indirect. Example: activator(ind)
+#### Disease Mechanism
+Describe the mechanism to which the connection between the gene and the disease is tied. Use keywords, not full sentences. Examples include risk factor, better outcomes, proliferation, cell cycle progression, apoptosis, pro inflammation, anti inflammation
+#### Treatment Mechanism
+Describe the mechanism to which the connection between the gene and the treatment is tied. Use keywords, not full sentences. Examples include risk factor, susceptibility, resistance, better outcomes, growth inhibition, autophagy
+#### Associated Factors
+Enter information about other contexts or more specific info that don’t fit into the other categories. Examples include age, mechanisms of action etc.
+#### Cellline
+Specify the cell line mentioned in which the connection between the gene and other entities is described. If the exact cell line is not mentioned, add more general info like patient, human cancer cells, mouse cancer cells etc.
+#### Species
+Specify the species being studied (e.g., human, mouse, rat, etc.).
+#### Tissue
+Specify the tissue in which the connection was observed. If only the organ is stated, note the organ. If not specified, write NA.
+If the paper talks about metastases, write metastases. If the organ of the metastases is known, note only the organ.
+#### Confidence
+Use the labels: low, medium, high.
+Low: No source/experimental data, low certainty language.
+Medium: Source/experimental data but uncertain language or certain language but no source.
+High: Source/experimental data and high certainty language.
+#### Type of Evidence
+Use the following labels (direct, indirect, citation). Explanations:
+Direct: if we have In Vivo or In Vitro evidence of a direct cause and effect.
+Indirect: data strongly suggests a connection. a Correlation can be observed but not directly proven.
+Citation: Given a citation in a text that does not specify the type of evidence. Formulations like: studies have shown or just a statement and a citation number behind it.
+#### Sentence
+Each sentence has a number given like this: Sentence[1]:. Provide the sentence numbers that support the statements made in the rest of the row. This often includes multiple sentences.
+## Examples:
+
+	
+Input:
+Potential genes: SATA3, RUNX2-SOX9-JMJD1C, JMJD1C, SOX9-regulated, STAT3, histone H3 lysine 9 methylation (mono/di) demethylase, JAK2, Menin, MYC, SOX9, RUNX2
+Sentence[142]: ""r the transcriptional network that is crucial for OS cell survival.""
+→ ["OS"/Disease]
+Sentence[143]: ""We leveraged the knowledge that RUNX2 is a transcription factor dependency for OS [6] and discovered that SOX9 is an important component of the RUNX2 network (Fig. 7).""
+→ ["RUNX2"/Gene, "OS"/Disease, "SOX9"/Gene, "RUNX2"/Gene]
+Sentence[144]: ""Several lines of evidence support this conclusion.""
+Sentence[145]: ""First, SOX9 is a downstream target of RUNX2.""
+→ ["SOX9"/Gene, "RUNX2"/Gene]
+Sentence[146]: ""Second, SOX9 interacts with RUNX2 to induce the transcription of MYC, a known survival factor in OS and many types of cancer [6, 29].""
+→ ["SOX9"/Gene, "RUNX2"/Gene, "MYC"/Gene, "OS"/Disease, "cancer"/Disease]
+Sentence[147]: ""Third, we identified JMJD1C as a novel interacting partner of SOX9.""
+→ ["JMJD1C"/Gene, "SOX9"/Gene]
+Sentence[148]: ""Last, JMJD1C knockdown and SOX9 knockdown phenocopy in the inhibition of OS tumor growth.""
+→ ["JMJD1C"/Gene, "SOX9"/Gene, "OS tumor"/Disease]
+Sentence[149]: ""Fig. 7 A model of RUNX2-SOX9-JMJD1C network in OS.""
+→ ["RUNX2-SOX9-JMJD1C"/Gene, "OS"/Disease]
+Sentence[150]: ""RUNX2 induces SOX9 transcription.""
+→ ["RUNX2"/Gene, "SOX9"/Gene]
+Sentence[151]: ""SOX9 interacts with RUNX2 and JMJD1C to activate MYC to promote survival of OS cells
+As to SOX9-regulated genes, we cautioned that it is unknown whether they are direct
+targets of SOX9 due to our unsuccessful attempts to perform ChIPseq of SOX9.""
+→ ["SOX9"/Gene, "RUNX2"/Gene, "JMJD1C"/Gene, "MYC"/Gene, "OS"/Disease, "SOX9-regulated"/Gene, "SOX9"/Gene, "SOX9"/Gene]
+Sentence[152]: ""This prevents us from further investigating the downstream targets that mediate SOX9's function.""
+→ ["SOX9"/Gene]
+Sentence[153]: ""However, the regulation of MYC and enrichment of MYC-regulated genes strongly support the notion that the pro-survival function of SOX9 in OS is partially through MYC.""
+→ ["MYC"/Gene, "MYC"/Gene, "SOX9"/Gene, "OS"/Disease, "MYC"/Gene]
+Sentence[154]: ""JMJD1C was originally discovered as a histone H3 lysine 9 methylation (mono/di) demethylase [30].""
+→ ["JMJD1C"/Gene, "histone H3 lysine 9 methylation (mono/di) demethylase"/Gene]
+Sentence[155]: ""Recently, non-histone substrates, such as STAT3, emerged as JMJD1C's substrates [31].""
+→ ["STAT3"/Gene, "JMJD1C"/Gene]
+Sentence[156]: ""Interestingly, STAT3 overexpression has been associated with poor prognosis of OS and the inhibition of JAK2/SATA3 by an inhibitor has shown promising result in OS tumor
+reduction in nude mice [32].""
+→ ["STAT3"/Gene, "OS"/Disease, "JAK2"/Gene, "SATA3"/Gene, "OS tumor"/Disease, "mice"/Species]
+Sentence[157]: ""Although our study focues on SOX9, it is possible that JMJD1C regulating OS growth through affecting the activities of multiple TFs.""
+→ ["SOX9"/Gene, "JMJD1C"/Gene, "OS"/Disease]
+Sentence[158]: ""It has been shown that JMJD1C plays a role in several types of cancer, such as leukemia [33].""
+→ ["JMJD1C"/Gene, "cancer"/Disease, "leukemia"/Disease]
+Sentence[159]: ""In our study, we show that JMJD1C is critical for the growth of OS.""
+→ ["JMJD1C"/Gene, "OS"/Disease]
+Sentence[160]: ""Given that depletion of JMJD1C or SOX9 has similar effects on OS growth and these two proteins interact with each other, it is highly likely that JMJD1C may cooperate with
+SOX9 to drive OS cell survival.""
+→ ["JMJD1C"/Gene, "SOX9"/Gene, "OS"/Disease, "JMJD1C"/Gene, "SOX9"/Gene, "OS"/Disease]
+Sentence[161]: ""However, whether SOX9 recruits JMJD1C to demethylate histones or JMJD1C demethylates SOX9 or both remains unclear.""
+→ ["SOX9"/Gene, "JMJD1C"/Gene, "JMJD1C"/Gene, "SOX9"/Gene]
+Sentence[162]: ""Future studies should test these possibilities.""
+Sentence[163]: ""Our study has implications for the development of targeted therapies for OS.""
+→ ["OS"/Disease]
+Sentence[164]: ""For example, the results from this study suggest that JMJD1C is an attractive target.""
+→ ["JMJD1C"/Gene]
+Sentence[165]: ""Although there are currently no JMJD1C-specific inhibitors, once they become available, it will be interesting to test their effects on OS growth.""
+→ ["JMJD1C"/Gene, "OS"/Disease]
+Sentence[166]: ""The interaction between SOX9 and RUNX2 also raises the possibility of co-inhibiting the pathways of these two inhibitors.""
+→ ["SOX9"/Gene, "RUNX2"/Gene]
+Sentence[167]: ""Previously, we found that RUNX2 recruits Menin to activate MYC.""
+→ ["RUNX2"/Gene, "Menin"/Gene, "MYC"/Gene]
+Sentence[168]: ""Mi-2 and Mi-3, two small-molecule inhibitors for Menin, impair RUNX2's function and increase apoptosis of OS cells [6].""
+→ ["Mi-2"/Chemical, "Mi-3"/Chemical, "Menin"/Gene, "RUNX2"/Gene, "OS"/Disease]
+Sentence[169]: ""Therefore, the co-inhibition of SOX9 and RUNX2 by combining JMJD1C-specific inhibitors with Mi-2 or Mi-3 may kill OS cells more effectively.""
+→ ["SOX9"/Gene, "RUNX2"/Gene, "JMJD1C"/Gene, "Mi-2"/Chemical, "Mi-3"/Chemical, "OS"/Disease]
+Sentence[170]: ""Materials and methods
+Cell culture
+Umbilical cord-derived (Cat#: PCS-500-010), adipose tissue-derived (Cat#: PCS-500-011), and bone marrow-derived (BM, Cat#: PCS-500-012)
+MSCs, SAOS2 (Cat#: HTB-85), U2OS (Cat#: HTB-96), HOS (Cat#: CRL-1543), HOS-MNNG (Cat#: CRL-1547), 143B (Cat#: CRL-8303), G292 (Cat#: CRL-1423), and MG63 (Cat#: CRL-1427) cells were
+purchased from ATCC and cultured per the vendor's instructions.""
+→ ["PCS-500"/CellLine, "PCS-500"/CellLine, "PCS-500"/CellLine, "SAOS2"/CellLine, "HTB-85"/CellLine, "U2OS"/CellLine, "HTB-96"/CellLine, "HOS"/CellLine, "CRL-1543"/Chemical,
+"HOS-MNNG"/CellLine, "CRL-1547"/CellLine, "143B"/CellLine, "CRL-8303"/Chemical, "G292"/CellLine, "CRL-1423"/Chemical, "MG63"/CellLine, "CRL-1427"/Chemical]
+Output:
+{{
+
+
+"Table": 
+"Gene/Protein	Disease	Treatment/Exposure	Connection Disease	Connection Treatment	Disease Mechanism	Treatment Mechanism	Associated Factors	Cellline	Species	Tissue	Confidence	Type of Evidence	Sentence
+RUNX2	Cancer(osteosarcoma)(sarcoma)	Mi-2,Mi-3	driver	suppressor(ind)	cancer cell survival	increased apoptosis	transcription factor	NA	NA	bone	high	citation	[143,146,151,167,168]
+SOX9	Cancer(osteosarcoma)(sarcoma)	knock-down	driver	suppressor	cancer cell survival, cancer growth	growth inhibition	transcription factor	NA	NA	bone	high	direct	[146,148,151,153,160]
+MYC	cancer(osteosarcoma)(sarcoma), cancer(NA)(NA)	NA	driver	NA	cancer cell survival	NA	NA	NA	NA	bone, NA	high	citation	[146,151,153]
+MYC	cancer(osteosarcoma)(sarcoma)	upstream knock-down 	driver	suppressor(ind)	cancer cell survival	growth inhibition	NA	NA	NA	bone, NA	high	indirect	[153]
+JMJD1C	Cancer(osteosarcoma)(sarcoma)	knock-down	driver	suppressor	cancer cell survival, cancer growth	growth inhibition	NA	NA	NA	bone	high	direct	[148,151,159]
+STAT3(P)	Cancer(osteosarcoma)(sarcoma)	NA	driver	NA	poor prognosis	NA	overexpression	NA	NA	bone	high	citation	[155,156]
+JAK2/STAT3(path)	Cancer(osteosarcoma)(sarcoma)	Inhibitor	driver	suppressor	NA	tumor reduction	NA	NA	mouse	bone	medium	citation	[156]"
+
+
+}}
+Example 2:
+
+Input:
+Potential genes: miR-15a, Cyclin D1, miR-125b-5p, miR-21, miR-34, vascular endothelial growth factor, Bcl-2, miR-17∼92, MCL-1, histone deacetylases, HDAC, miR-181a/b, BMME, miR-16-1, miR-106b∼25, CDK6, CD138, phosphoinositide 3-kinases, p53, p21, DNA methyltransferase 3B, miR-29b, Sp1, Notch, IL-6R, miR-32, miR-125a-5p, VEGF, DNMT3B, PI3K, miR-125, BAX, B-cell lymphoma-2, miR-29-b, mitogen-activated protein kinase, STAT-3, MDM2, MAPK
+
+
+
+
+Sentence[42]: ""One of the underlying mechanisms leading to the evolution from monoclonal gammopathy of undetermined significance (MGUS) to MM is represented by distinctive expression
+patterns of different miRs between MGUS and MM PCs and normal PCs, also suggesting a role for miRs in MM progression.""
+→ ["monoclonal gammopathy of undetermined significance"/Disease, "MGUS"/Disease, "MM"/Disease, "MGUS"/Disease, "MM"/Disease, "MM"/Disease]
+Sentence[43]: ""Pichiorri et al. [32] analyzed miRs expression in MM cell lines and in BM CD138+ cells purified from MM and MGUS patients and healthy donors.""
+→ ["MM"/Disease, "CD138"/Gene, "MM"/Disease, "MGUS"/Disease, "patients"/Species]
+Sentence[44]: ""Microarray analysis revealed the overexpression of miR-21, miR-106b∼25 cluster, miR-181a/b in both MM and MGUS cells compared to normal PCs.""
+→ ["miR-21"/Gene, "miR-106b∼25"/Gene, "miR-181a/b"/Gene, "MM"/Disease, "MGUS"/Disease]
+Sentence[45]: ""Furthermore, they found higher levels of miR-32 and miR-17∼92 cluster in MM patients suggesting that the multistep progression of MM correlates to a gradual modulation of
+miRs expression.""
+→ ["miR-32"/Gene, "miR-17∼92"/Gene, "MM"/Disease, "patients"/Species, "MM"/Disease]
+Sentence[46]: ""Other studies confirmed the modulation of miRs profile during MM progression (Table 1).""
+→ ["MM"/Disease]
+Sentence[47]: ""The recurrent altered miRs include miR-15a/miR-16-1 cluster, miR-21, miR-17∼92 cluster, and miR-34 family [12,15,32,33,34,35,36,37,38,39,40].""
+→ ["miR-15a"/Gene, "miR-16-1"/Gene, "miR-21"/Gene, "miR-17∼92"/Gene, "miR-34"/Gene]
+Sentence[48]: ""As listed in Table 1, they regulate the expression of gene/protein targets associated to cellular pathways that are deeply involved in MM pathogenesis, i.e., IL-6R/STAT-3,
+phosphoinositide 3-kinases (PI3K), mitogen-activated protein kinase (MAPK), p53, B-cell lymphoma-2 (Bcl-2), Cyclin D1, Notch, and vascular endothelial growth factor (VEGF).""
+→ ["MM"/Disease, "IL-6R"/Gene, "STAT-3"/Gene, "phosphoinositide 3-kinases"/Gene, "PI3K"/Gene, "mitogen-activated protein kinase"/Gene, "MAPK"/Gene, "p53"/Gene, "B-cell lymphoma-2"/Gene,
+"Bcl-2"/Gene, "Cyclin D1"/Gene, "Notch"/Gene, "vascular endothelial growth factor"/Gene, "VEGF"/Gene]
+Sentence[49]: ""These pathways sustain cell proliferation, resistance to apoptosis and BM angiogenesis [12,15,32,33,34,35,36,37,38,39,40].""
+Sentence[50]: ""Furthermore, in vitro and in vivo studies support a tumor suppressor function of miR-29b.""
+→ ["tumor"/Disease, "miR-29b"/Gene]
+Sentence[51]: ""Its targets are the histone deacetylases (HDAC) that contribute to its downregulation via a feedback loop, and the DNA methyltransferase 3B (DNMT3B) [41,42].""
+→ ["histone deacetylases"/Gene, "HDAC"/Gene, "DNA methyltransferase 3B"/Gene, "DNMT3B"/Gene]
+Sentence[52]: ""The miR-29-b controls cell apoptosis, proliferation, and migration via epigenetic modifications and targeting the anti-apoptotic protein MCL-1 and the CDK6 [43].""
+→ ["miR-29-b"/Gene, "MCL-1"/Gene, "CDK6"/Gene]
+Sentence[53]: ""Its levels are increased by bortezomib and enhance the bortezomib-induced apoptosis of MM cells via downregulation of the transcription factor Sp1 [44].""
+→ ["bortezomib"/Chemical, "bortezomib"/Chemical, "MM"/Disease, "Sp1"/Gene]
+Sentence[54]: ""Data on the miR-125 family are controversial.""
+→ ["miR-125"/Gene]
+Sentence[55]: ""The miR-125a-5p is overexpressed in MM patients and cell lines, and is closely associated to the t(4;14) translocation [45,46].""
+→ ["miR-125a-5p"/Gene, "MM"/Disease, "patients"/Species]
+Sentence[56]: ""The miR-125a-5p reduces the expression of p53, p21, BAX, and MDM2, sustaining MM cell growth and migration and preventing cell apoptosis.""
+→ ["miR-125a-5p"/Gene, "p53"/Gene, "p21"/Gene, "BAX"/Gene, "MDM2"/Gene, "MM"/Disease]
+Sentence[57]: ""By contrast, Morelli et al. [47] showed that miR-125b-5p is downregulated in CD138+ cells from MM patients and in MM cell lines suggesting its tumor suppressor role.""
+→ ["miR-125b-5p"/Gene, "CD138"/Gene, "MM"/Disease, "patients"/Species, "MM"/Disease, "tumor"/Disease]
+Sentence[58]: ""Its enhanced expression abrogates the protective role of BMME, impairs MM cell growth and survival, and triggers apoptotic and autophagic-cell death.""
+→ ["BMME"/Gene, "MM"/Disease]
+Sentence[59]: ""Conversely, a microarray analysis of circulating miRs showed that miR-125a-5p plasma levels have a diagnostic and predictive role in MM being correlated to disease stage and
+poor prognosis [48].""
+→ ["miR-125a-5p"/Gene, "MM"/Disease]
+Sentence[60]: ""Overall, these studies established a direct link between miRs deregulation and malignant transformation suggesting their oncogenic and/or tumor suppressor role in MM (Table
+1).""
+→ ["tumor"/Disease, "MM"/Disease]
+
+Output:
+
+
+"Table":
+"Gene/Protein	Disease	Treatment/Exposure	Connection Disease	Connection Treatment	Disease Mechanism	Treatment Mechanism	Associated Factors	Cellline	Species	Tissue	Confidence	Type of Evidence	Sentence
+miR-21	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	overexpression	NA	miR	Patient	human	NA	High	citation	[43,44,47]
+miR-106b∼25(clu)	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	overexpression	NA	miR	Patient	human	NA	High	citation	[43,44]
+miR-181a	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	overexpression	NA	miR	Patient	human	NA	High	citation	[43,44]
+miR-181b	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	overexpression	NA	miR	Patient	human	NA	High	citation	[43,44]
+miR-32	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	overexpression	NA	miR	Patient	human	NA	High	citation	[43,45]
+miR-17∼92(clu)	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	overexpression	NA	miR	Patient	human	NA	High	citation	[43,45]
+miR-15a(clu)	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	altered expression	NA	miR	NA	NA	NA	High	citation	[47]
+miR-16-1(clu)	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	altered expression	NA	miR	NA	NA	NA	High	citation	[47]
+miR-34(fam)	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	altered expression	NA	miR	NA	NA	NA	High	citation	[47]
+PI3K	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	proliferation,apoptosis resistance,angiogenesis	NA	miR	NA	NA	NA	High	citation	[48,49]
+MAPK(fam)	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	proliferation,apoptosis resistance,angiogenesis	NA	miR	NA	NA	NA	High	citation	[48,49]
+p53	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	proliferation,apoptosis resistance,angiogenesis	NA	miR	NA	NA	NA	High	citation	[48,49]
+Bcl-2	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	proliferation,apoptosis resistance,angiogenesis	NA	miR	NA	NA	NA	High	citation	[48,49]
+Cyclin D1	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	proliferation,apoptosis resistance,angiogenesis	NA	miR	NA	NA	NA	High	citation	[48,49]
+Notch	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	proliferation,apoptosis resistance,angiogenesis	NA	miR	NA	NA	NA	High	citation	[48,49]
+VEGF	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	proliferation,apoptosis resistance,angiogenesis	NA	miR	NA	NA	NA	High	citation	[48,49]
+IL-6R	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	proliferation,apoptosis resistance,angiogenesis	NA	miR	NA	NA	NA	High	citation	[48,49]
+STAT-3	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	proliferation,apoptosis resistance,angiogenesis	NA	miR	NA	NA	NA	High	citation	[48,49]
+miR-29b	Cancer(Multiple Myeloma)(Myeloma)	NA	connected	NA	tumor supressor,apoptosis, proliferation, migration, epigenetic modifications	NA	miR	NA	NA	NA	medium	citation	[50,52]"
+}}
+## Task 
+# Input
+{block}
+
+# output:
+############################################################################
+Gene_Gene_annotation:
+
+Instructions for Filling the Gene/Gene Interactions Table
+    Below are the guidelines for filling in the table. Please follow these instructions carefully to ensure consistency and accuracy.
+    Column Labels and Descriptions
+
+    Gene/Protein:
+    Name the Gene/Protein for which connections to (another) Gene/Protein are described. Label it additionally with a (G) if it is stated to be the gene and (P) if it is a Protein.
+    add a (mut) label if the Gene or Protein is described to have a mutation. Example: Gene(G)(mut) 
+
+    Connected_Gene/protein:
+    The gene/Protein for which connections to the aforementioned Gene/Protein are described. Label it additionally with a (G) if it is stated to be the gene and (P) if it is a Protein. Example: Protein(P)
+    add a (mut) label if the Gene or Protein is described to have a mutation. Example: Gene(G)(mut) 
+    
+    Connection_Type:
+    activator / inhibitor 
+    Use “activator” if some positive regulation between the Genes/Proteins is described.
+    Use “inhibitor” if some negative regulation between the Genes/Proteins is described.
+    Add (co) if the gene/inhibitor is co-regulating the Gene with another Gene/Protein.
+    Add (ind) if the gene is involved in the regulation process but unclear if itself or one of its downstream targets is involved in the regulation.
+    Only if activation/inhibition is not mentioned, use: connected/ binding / target 
+    Use "connected" if no specific interaction is described; there is just some relationship between the genes/Proteins. Add (ind) if the gene is involved in the regulation process but unclear if itself or one of its downstream targets is involved in the regulation.
+    Use “binding” if the Gene/Protein binds to the connected Gene/Protein. 
+    Use “target” if the Gene/Protein targets the connected Gene/Protein.
+    Example: activator(ind)
+    
+    Regulation_level:
+    at what level does the regulation take place and choose the most fitting label based on the information provided in the text. The (L) label is to be added if localisation is mentioned in the context of regulation.
+    label definitions:
+    epigenetic: regulation happens through Methylation and other changes to the DNA and histones that change DNA folding.
+    transcription: regulation happens in the process of producing mRNA
+    splicing: different splicing patterns change the mRNA
+    mrna(L): regulation happens through longevity and state of mRNA
+    translation(L): regulation happens in the process of producing a protein from mRNA
+    Protein(L): regulation happens through stability and state of the protein
+    other: if another method is mentioned
+
+    Disease:
+
+    If a disease is connected to the mentioned genes, specify the disease here. If the disease is a cancer, use the following format: disease(cancer name)(cancer type) enter NA if a category is not given. Use the information in the text and your understanding of cancer to fill in this information.
+    For cancer types use the labels: Carcinoma, Sarcoma, Lymphoma, Leukemia, Myeloma.
+    Example: Cancer(lung cancer)(carcinoma) or parkinson
+    Treatment/Exposure:
+    If a treatment (drug/chemical/radiation, etc.) is mentioned that was used and a connection to the gene is mentioned, write it here.
+
+    Associated_Factors:
+    Enter information about other contexts that don’t fit into the other categories. Examples include age, inflammation, etc.
+
+    Cellline:
+    Specify the cell line mentioned in which the connection between the gene and other entities is described. If the exact cell line is not mentioned, add more general info like patient, human cancer cells, mouse cancer cells etc.
+
+    Species:
+    Specify the species being studied (e.g., human, mouse, etc.).
+
+    Tissue:
+    If the connection was observed within a specific tissue rather than a cell culture, specify the tissue type. If only the organ is stated, note the organ. If not specified, write NA.
+    If the paper talks about metastases, write metastases. If the organ of the metastases is known, note only the organ.
+    Confidence:
+
+    Use the labels: low, medium, high.
+    Low: No source/experimental data, low certainty language.
+    Medium: Source/experimental data but uncertain language or certain language but no source.
+    High: Source/experimental data and high certainty language.
+
+    Type_of_Evidence:
+    Use the following labels (direct, indirect, citation). Explanations of the labels are given below.:
+    Direct
+    In Vivo: Observed directly in living organisms.
+    In Vitro: Demonstrated in isolated biological systems.
+    Indirect: infered in some way
+    Citation: Given a citation in a text that does not specify the type of evidence. Formulations like: studies have shown or just a statement and a citation number behind it.
+    Sentence
+
+
+    Each sentence has a number given like this: Sentence[1]:. Provide the sentence numbers that support the statements made in the rest of the row. This often includes multiple sentences.
+    ## Examples:
+
+        
+    Input:
+    Potential genes: SATA3, RUNX2-SOX9-JMJD1C, JMJD1C, SOX9-regulated, STAT3, histone H3 lysine 9 methylation (mono/di) demethylase, JAK2, Menin, MYC, SOX9, RUNX2
+    Sentence[142]: ""r the transcriptional network that is crucial for OS cell survival.""
+    → ["OS"/Disease]
+    Sentence[143]: ""We leveraged the knowledge that RUNX2 is a transcription factor dependency for OS [6] and discovered that SOX9 is an important component of the RUNX2 network (Fig. 7).""
+    → ["RUNX2"/Gene, "OS"/Disease, "SOX9"/Gene, "RUNX2"/Gene]
+    Sentence[144]: ""Several lines of evidence support this conclusion.""
+    Sentence[145]: ""First, SOX9 is a downstream target of RUNX2.""
+    → ["SOX9"/Gene, "RUNX2"/Gene]
+    Sentence[146]: ""Second, SOX9 interacts with RUNX2 to induce the transcription of MYC, a known survival factor in OS and many types of cancer [6, 29].""
+    → ["SOX9"/Gene, "RUNX2"/Gene, "MYC"/Gene, "OS"/Disease, "cancer"/Disease]
+    Sentence[147]: ""Third, we identified JMJD1C as a novel interacting partner of SOX9.""
+    → ["JMJD1C"/Gene, "SOX9"/Gene]
+    Sentence[148]: ""Last, JMJD1C knockdown and SOX9 knockdown phenocopy in the inhibition of OS tumor growth.""
+    → ["JMJD1C"/Gene, "SOX9"/Gene, "OS tumor"/Disease]
+    Sentence[149]: ""Fig. 7 A model of RUNX2-SOX9-JMJD1C network in OS.""
+    → ["RUNX2-SOX9-JMJD1C"/Gene, "OS"/Disease]
+    Sentence[150]: ""RUNX2 induces SOX9 transcription.""
+    → ["RUNX2"/Gene, "SOX9"/Gene]
+    Sentence[151]: ""SOX9 interacts with RUNX2 and JMJD1C to activate MYC to promote survival of OS cells
+    As to SOX9-regulated genes, we cautioned that it is unknown whether they are direct
+    targets of SOX9 due to our unsuccessful attempts to perform ChIPseq of SOX9.""
+    → ["SOX9"/Gene, "RUNX2"/Gene, "JMJD1C"/Gene, "MYC"/Gene, "OS"/Disease, "SOX9-regulated"/Gene, "SOX9"/Gene, "SOX9"/Gene]
+    Sentence[152]: ""This prevents us from further investigating the downstream targets that mediate SOX9's function.""
+    → ["SOX9"/Gene]
+    Sentence[153]: ""However, the regulation of MYC and enrichment of MYC-regulated genes strongly support the notion that the pro-survival function of SOX9 in OS is partially through MYC.""
+    → ["MYC"/Gene, "MYC"/Gene, "SOX9"/Gene, "OS"/Disease, "MYC"/Gene]
+    Sentence[154]: ""JMJD1C was originally discovered as a histone H3 lysine 9 methylation (mono/di) demethylase [30].""
+    → ["JMJD1C"/Gene, "histone H3 lysine 9 methylation (mono/di) demethylase"/Gene]
+    Sentence[155]: ""Recently, non-histone substrates, such as STAT3, emerged as JMJD1C's substrates [31].""
+    → ["STAT3"/Gene, "JMJD1C"/Gene]
+    Sentence[156]: ""Interestingly, STAT3 overexpression has been associated with poor prognosis of OS and the inhibition of JAK2/SATA3 by an inhibitor has shown promising result in OS tumor
+    reduction in nude mice [32].""
+    → ["STAT3"/Gene, "OS"/Disease, "JAK2"/Gene, "SATA3"/Gene, "OS tumor"/Disease, "mice"/Species]
+    Sentence[157]: ""Although our study focues on SOX9, it is possible that JMJD1C regulating OS growth through affecting the activities of multiple TFs.""
+    → ["SOX9"/Gene, "JMJD1C"/Gene, "OS"/Disease]
+    Sentence[158]: ""It has been shown that JMJD1C plays a role in several types of cancer, such as leukemia [33].""
+    → ["JMJD1C"/Gene, "cancer"/Disease, "leukemia"/Disease]
+    Sentence[159]: ""In our study, we show that JMJD1C is critical for the growth of OS.""
+    → ["JMJD1C"/Gene, "OS"/Disease]
+    Sentence[160]: ""Given that depletion of JMJD1C or SOX9 has similar effects on OS growth and these two proteins interact with each other, it is highly likely that JMJD1C may cooperate with
+    SOX9 to drive OS cell survival.""
+    → ["JMJD1C"/Gene, "SOX9"/Gene, "OS"/Disease, "JMJD1C"/Gene, "SOX9"/Gene, "OS"/Disease]
+    Sentence[161]: ""However, whether SOX9 recruits JMJD1C to demethylate histones or JMJD1C demethylates SOX9 or both remains unclear.""
+    → ["SOX9"/Gene, "JMJD1C"/Gene, "JMJD1C"/Gene, "SOX9"/Gene]
+    Sentence[162]: ""Future studies should test these possibilities.""
+    Sentence[163]: ""Our study has implications for the development of targeted therapies for OS.""
+    → ["OS"/Disease]
+    Sentence[164]: ""For example, the results from this study suggest that JMJD1C is an attractive target.""
+    → ["JMJD1C"/Gene]
+    Sentence[165]: ""Although there are currently no JMJD1C-specific inhibitors, once they become available, it will be interesting to test their effects on OS growth.""
+    → ["JMJD1C"/Gene, "OS"/Disease]
+    Sentence[166]: ""The interaction between SOX9 and RUNX2 also raises the possibility of co-inhibiting the pathways of these two inhibitors.""
+    → ["SOX9"/Gene, "RUNX2"/Gene]
+    Sentence[167]: ""Previously, we found that RUNX2 recruits Menin to activate MYC.""
+    → ["RUNX2"/Gene, "Menin"/Gene, "MYC"/Gene]
+    Sentence[168]: ""Mi-2 and Mi-3, two small-molecule inhibitors for Menin, impair RUNX2's function and increase apoptosis of OS cells [6].""
+    → ["Mi-2"/Chemical, "Mi-3"/Chemical, "Menin"/Gene, "RUNX2"/Gene, "OS"/Disease]
+    Sentence[169]: ""Therefore, the co-inhibition of SOX9 and RUNX2 by combining JMJD1C-specific inhibitors with Mi-2 or Mi-3 may kill OS cells more effectively.""
+    → ["SOX9"/Gene, "RUNX2"/Gene, "JMJD1C"/Gene, "Mi-2"/Chemical, "Mi-3"/Chemical, "OS"/Disease]
+    Sentence[170]: ""Materials and methods
+    Cell culture
+    Umbilical cord-derived (Cat#: PCS-500-010), adipose tissue-derived (Cat#: PCS-500-011), and bone marrow-derived (BM, Cat#: PCS-500-012)
+    MSCs, SAOS2 (Cat#: HTB-85), U2OS (Cat#: HTB-96), HOS (Cat#: CRL-1543), HOS-MNNG (Cat#: CRL-1547), 143B (Cat#: CRL-8303), G292 (Cat#: CRL-1423), and MG63 (Cat#: CRL-1427) cells were
+    purchased from ATCC and cultured per the vendor's instructions.""
+    → ["PCS-500"/CellLine, "PCS-500"/CellLine, "PCS-500"/CellLine, "SAOS2"/CellLine, "HTB-85"/CellLine, "U2OS"/CellLine, "HTB-96"/CellLine, "HOS"/CellLine, "CRL-1543"/Chemical,
+    "HOS-MNNG"/CellLine, "CRL-1547"/CellLine, "143B"/CellLine, "CRL-8303"/Chemical, "G292"/CellLine, "CRL-1423"/Chemical, "MG63"/CellLine, "CRL-1427"/Chemical]
+    Output:
+    {{
+
+
+
+    "Table": 
+    Gene/Protein    Connected_Gene/Protein  Connection_Type Regulation_Level    Disease Treatment/Exposure	Associated_Factors	Cellline	Species	Tissue	Confidence	Type_of_Evidence	Sentence												
+    RUNX2	SOX9	activator(ind)	transcription	Cancer(osteosarcoma)(sarcoma)	NA	NA	NA	NA	NA	high	direct	[143, 145,146,149,150]
+    RUNX2	MYC	activator(co)	transcription	Cancer(osteosarcoma)(sarcoma)	NA	NA	NA	NA	NA	high	direct	[146,167]
+    SOX9	MYC	activator(co)	transcription	Cancer(osteosarcoma)(sarcoma)	NA	NA	NA	NA	NA	high	citation	[143,146]
+    JMJD1C	MYC	activator(co)		Cancer(osteosarcoma)(sarcoma)	NA	NA	NA	NA	NA	high	direct	[151]
+    JMJD1C	STAT3	target	protein	Cancer(osteosarcoma)(sarcoma)	NA	NA	NA	NA	NA	high	citation	[148,155]
+    JMJD1C(P)	SOX9(P)	connected		Cancer(osteosarcoma)(sarcoma)	NA	cell survival	NA	NA	NA	medium	indirect	[160,161]
+    JMJD1C(P)	SOX9(P)	connected		Cancer(osteosarcoma)(sarcoma)	NA	NA	NA	NA	NA	high	direct	[147,149]
+    Menin	MYC	activator(co)		Cancer(osteosarcoma)(sarcoma)	NA	NA	NA	NA	NA	high	direct	[143,146,167,168]
+    RUNX2(P)	Menin(P)	target		Cancer(osteosarcoma)(sarcoma)	NA	NA	NA	NA	NA	High	Direct	[167,168]
+
+
+    }}
+    Example 2:
+
+    Input:
+    Potential genes: miR-15a, Cyclin D1, miR-125b-5p, miR-21, miR-34, vascular endothelial growth factor, Bcl-2, miR-17∼92, MCL-1, histone deacetylases, HDAC, miR-181a/b, BMME, miR-16-1, miR-106b∼25, CDK6, CD138, phosphoinositide 3-kinases, p53, p21, DNA methyltransferase 3B, miR-29b, Sp1, Notch, IL-6R, miR-32, miR-125a-5p, VEGF, DNMT3B, PI3K, miR-125, BAX, B-cell lymphoma-2, miR-29-b, mitogen-activated protein kinase, STAT-3, MDM2, MAPK
+
+
+
+
+    Sentence[42]: ""One of the underlying mechanisms leading to the evolution from monoclonal gammopathy of undetermined significance (MGUS) to MM is represented by distinctive expression
+    patterns of different miRs between MGUS and MM PCs and normal PCs, also suggesting a role for miRs in MM progression.""
+    → ["monoclonal gammopathy of undetermined significance"/Disease, "MGUS"/Disease, "MM"/Disease, "MGUS"/Disease, "MM"/Disease, "MM"/Disease]
+    Sentence[43]: ""Pichiorri et al. [32] analyzed miRs expression in MM cell lines and in BM CD138+ cells purified from MM and MGUS patients and healthy donors.""
+    → ["MM"/Disease, "CD138"/Gene, "MM"/Disease, "MGUS"/Disease, "patients"/Species]
+    Sentence[44]: ""Microarray analysis revealed the overexpression of miR-21, miR-106b∼25 cluster, miR-181a/b in both MM and MGUS cells compared to normal PCs.""
+    → ["miR-21"/Gene, "miR-106b∼25"/Gene, "miR-181a/b"/Gene, "MM"/Disease, "MGUS"/Disease]
+    Sentence[45]: ""Furthermore, they found higher levels of miR-32 and miR-17∼92 cluster in MM patients suggesting that the multistep progression of MM correlates to a gradual modulation of
+    miRs expression.""
+    → ["miR-32"/Gene, "miR-17∼92"/Gene, "MM"/Disease, "patients"/Species, "MM"/Disease]
+    Sentence[46]: ""Other studies confirmed the modulation of miRs profile during MM progression (Table 1).""
+    → ["MM"/Disease]
+    Sentence[47]: ""The recurrent altered miRs include miR-15a/miR-16-1 cluster, miR-21, miR-17∼92 cluster, and miR-34 family [12,15,32,33,34,35,36,37,38,39,40].""
+    → ["miR-15a"/Gene, "miR-16-1"/Gene, "miR-21"/Gene, "miR-17∼92"/Gene, "miR-34"/Gene]
+    Sentence[48]: ""As listed in Table 1, they regulate the expression of gene/protein targets associated to cellular pathways that are deeply involved in MM pathogenesis, i.e., IL-6R/STAT-3,
+    phosphoinositide 3-kinases (PI3K), mitogen-activated protein kinase (MAPK), p53, B-cell lymphoma-2 (Bcl-2), Cyclin D1, Notch, and vascular endothelial growth factor (VEGF).""
+    → ["MM"/Disease, "IL-6R"/Gene, "STAT-3"/Gene, "phosphoinositide 3-kinases"/Gene, "PI3K"/Gene, "mitogen-activated protein kinase"/Gene, "MAPK"/Gene, "p53"/Gene, "B-cell lymphoma-2"/Gene,
+    "Bcl-2"/Gene, "Cyclin D1"/Gene, "Notch"/Gene, "vascular endothelial growth factor"/Gene, "VEGF"/Gene]
+    Sentence[49]: ""These pathways sustain cell proliferation, resistance to apoptosis and BM angiogenesis [12,15,32,33,34,35,36,37,38,39,40].""
+    Sentence[50]: ""Furthermore, in vitro and in vivo studies support a tumor suppressor function of miR-29b.""
+    → ["tumor"/Disease, "miR-29b"/Gene]
+    Sentence[51]: ""Its targets are the histone deacetylases (HDAC) that contribute to its downregulation via a feedback loop, and the DNA methyltransferase 3B (DNMT3B) [41,42].""
+    → ["histone deacetylases"/Gene, "HDAC"/Gene, "DNA methyltransferase 3B"/Gene, "DNMT3B"/Gene]
+    Sentence[52]: ""The miR-29-b controls cell apoptosis, proliferation, and migration via epigenetic modifications and targeting the anti-apoptotic protein MCL-1 and the CDK6 [43].""
+    → ["miR-29-b"/Gene, "MCL-1"/Gene, "CDK6"/Gene]
+    Sentence[53]: ""Its levels are increased by bortezomib and enhance the bortezomib-induced apoptosis of MM cells via downregulation of the transcription factor Sp1 [44].""
+    → ["bortezomib"/Chemical, "bortezomib"/Chemical, "MM"/Disease, "Sp1"/Gene]
+    Sentence[54]: ""Data on the miR-125 family are controversial.""
+    → ["miR-125"/Gene]
+    Sentence[55]: ""The miR-125a-5p is overexpressed in MM patients and cell lines, and is closely associated to the t(4;14) translocation [45,46].""
+    → ["miR-125a-5p"/Gene, "MM"/Disease, "patients"/Species]
+    Sentence[56]: ""The miR-125a-5p reduces the expression of p53, p21, BAX, and MDM2, sustaining MM cell growth and migration and preventing cell apoptosis.""
+    → ["miR-125a-5p"/Gene, "p53"/Gene, "p21"/Gene, "BAX"/Gene, "MDM2"/Gene, "MM"/Disease]
+    Sentence[57]: ""By contrast, Morelli et al. [47] showed that miR-125b-5p is downregulated in CD138+ cells from MM patients and in MM cell lines suggesting its tumor suppressor role.""
+    → ["miR-125b-5p"/Gene, "CD138"/Gene, "MM"/Disease, "patients"/Species, "MM"/Disease, "tumor"/Disease]
+    Sentence[58]: ""Its enhanced expression abrogates the protective role of BMME, impairs MM cell growth and survival, and triggers apoptotic and autophagic-cell death.""
+    → ["BMME"/Gene, "MM"/Disease]
+    Sentence[59]: ""Conversely, a microarray analysis of circulating miRs showed that miR-125a-5p plasma levels have a diagnostic and predictive role in MM being correlated to disease stage and
+    poor prognosis [48].""
+    → ["miR-125a-5p"/Gene, "MM"/Disease]
+    Sentence[60]: ""Overall, these studies established a direct link between miRs deregulation and malignant transformation suggesting their oncogenic and/or tumor suppressor role in MM (Table
+    1).""
+    → ["tumor"/Disease, "MM"/Disease]
+
+    Output:
+    {{
+
+
+    "Table":
+    Gene/Protein	Connected_Gene/Protein	Connection_Type	Regulation_Level	Disease	Treatment/Exposure	Associated_Factors	Cellline	Species	Tissue	Confidence	Type_of_Evidence	Sentence
+    miR-29b	MCL1(P)	inhibitor	NA	Cancer	NA	apoptosis	NA	NA	NA	high	Citation	[52]
+    miR-29b	CDK6(P)	inhibitor	NA	Cancer	NA	apoptosis	NA	NA	NA	high	Citation	[52]
+    miR-29b	HDAC	target	NA	Cancer	NA	apoptosis	NA	NA	NA	high	Citation	[51]
+    miR-29b	DNMT3B	target	NA	Cancer	NA	apoptosis	NA	NA	NA	high	Citation	[51]
+    miR-29b	Sp1(G)	inhibitor	NA	Cancer(Multiple Myeloma)Myeloma	bortezomib	apoptosis	NA	NA	NA	High	Citation	[53]
+    miR-125a-5p	p53(G)	inhibitor	transcription	Cancer(Multiple Myeloma)Myeloma	NA	growth, migration, apoptosis resistance	NA	NA	NA	High	Citation	[56]
+    miR-125a-5p	p21(G)	inhibitor	transcription	Cancer(Multiple Myeloma)Myeloma	NA	growth, migration, apoptosis resistance	NA	NA	NA	High	Citation	[56]
+    miR-125a-5p	BAX(G)	inhibitor	transcription	Cancer(Multiple Myeloma)Myeloma	NA	growth, migration, apoptosis resistance	NA	NA	NA	High	Citation	[56]
+    miR-125a-5p	MDM2(G)	inhibitor	transcription	Cancer(Multiple Myeloma)Myeloma	NA	growth, migration, apoptosis resistance	NA	NA	NA	High	Citation	[56]"
+    }}
+    ## Task 
+    # Input
+    {block}
+
+    # output:
+
+
